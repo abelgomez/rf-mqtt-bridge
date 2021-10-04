@@ -40,20 +40,56 @@ void novyLight() {
     emitter.send(BTN_LIGHT);
 }
 
+void novyLightOn() {
+    emitter.setProtocol(12);
+    emitter.setPulseLength(350);
+    for (uint i = 0; i < 5; i++) {
+        emitter.send(BTN_LIGHT);
+        delay(100);
+    }
+    delay(300);
+    emitter.send(BTN_LIGHT);
+    delay(400);
+    emitter.send(BTN_LIGHT);
+}
+
+void novyLightOff() {
+    emitter.setProtocol(12);
+    emitter.setPulseLength(350);
+    for (uint i = 0; i < 5; i++) {
+        emitter.send(BTN_LIGHT);
+        delay(100);
+    }
+    delay(300);
+    emitter.send(BTN_LIGHT);
+}
+
+void novyFanMinus() {
+    emitter.setProtocol(12);
+    emitter.setPulseLength(350);
+    emitter.send(BTN_MINUS);
+}
+
+void novyFanPlus() {
+    emitter.setProtocol(12);
+    emitter.setPulseLength(350);
+    emitter.send(BTN_PLUS);
+}
+
 void novyFan(uint level) {
     emitter.setProtocol(12);
     emitter.setPulseLength(350);
     emitter.send(BTN_MINUS);
-    delay(10);
+    delay(200);
     emitter.send(BTN_MINUS);
-    delay(10);
+    delay(200);
     emitter.send(BTN_MINUS);
-    delay(10);
+    delay(200);
     emitter.send(BTN_MINUS);
-    delay(10);
+    delay(200);
     for (uint i = 0; i < level; i++) {
         emitter.send(BTN_PLUS);
-        delay(10);
+        delay(200);
     }
 }
 
@@ -80,12 +116,25 @@ void callback(char *topic, byte *payload, unsigned int length) {
     }
     Serial.println(payloadStr);
     if (TOPIC_NOVY_LIGHT.equals(topic)) {
-        Serial.println("Novy light on/off");
-        novyLight();
-    } else if (TOPIC_NOVY_FAN.equals(topic)) {
-        Serial.print("Outlet on: ");
+        Serial.print("Novy light: ");
         Serial.println(payloadStr);
-        plugsOn(payloadStr.toInt());
+        if (payloadStr.equalsIgnoreCase("on")) {
+            novyLightOn();
+        } else if (payloadStr.equalsIgnoreCase("off")) {
+            novyLightOff();
+        } else {
+            novyLight();
+        }
+    } else if (TOPIC_NOVY_MINUS.equals(topic)) {
+        Serial.println("Novy fan -");
+        novyFanMinus();
+    } else if (TOPIC_NOVY_PLUS.equals(topic)) {
+        Serial.println("Novy fan +");
+        novyFanPlus();
+    } else if (TOPIC_NOVY_FAN.equals(topic)) {
+        Serial.print("Novy fan level: ");
+        Serial.println(payloadStr);
+        novyFan(payloadStr.toInt());
     } else if (TOPIC_ETEKCITY_OUTLET_ON.equals(topic)) {
         Serial.print("Outlet on: ");
         Serial.println(payloadStr);
