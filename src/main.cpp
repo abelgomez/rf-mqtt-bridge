@@ -16,199 +16,181 @@
  */
 
 #include <Arduino.h>
-#include <ESP_EEPROM.h>
 #include <PubSubClient.h>
 #include <RCSwitch.h>
 #include <WiFiClientSecure.h>
-#include <WiFiManager.h>
 
 #include "GlobalConstants.h"
+#include "BridgeWiFiManager.h"
+#include "BuiltInLed.h"
 
-#define MAGIC "MG"
-#define MAGIC_LENGTH 2
-#define BROKER_LENGTH 64
-
+BridgeWiFiManager wiFiManager;
 RCSwitch emitter;
-WiFiManager wiFiManager;
+BuiltInLed builtInLed;
 WiFiClientSecure wiFiClient;
-PubSubClient client(wiFiClient);
-
-char magic[MAGIC_LENGTH] = "";
-char broker[BROKER_LENGTH] = DEFAULT_BROKER;
-unsigned short port = DEFAULT_LISTENING_PORT;
-
-WiFiManagerParameter titleLabelParam("<h3>Broker configuration</h3><p><small>Values below will only be saved if the above settings are set and a successful connection is established.</small></p>");
-WiFiManagerParameter brokerLabelParam("Hostname");
-WiFiManagerParameter brokerParam("broker", "Broker hostname", broker, BROKER_LENGTH - 1);
-WiFiManagerParameter portLabelParam("Port");
-WiFiManagerParameter portParam("port", "Port", String(port).c_str(), 5);
+PubSubClient mqttClient(wiFiClient);
 
 inline boolean pressed(uint8_t pin) {
     return digitalRead(pin) == LOW;
 }
 
-void builtInLedOn() {
-    pinMode(LED_BUILTIN, OUTPUT);
-    digitalWrite(LED_BUILTIN, LOW);
+void novyLight() {
+    emitter.setProtocol(12);
+    emitter.setPulseLength(350);
+    emitter.send(BTN_LIGHT);
 }
 
-void builtInLedOff() {
-    pinMode(LED_BUILTIN, OUTPUT);
-    digitalWrite(LED_BUILTIN, HIGH);
-}
-
-void blinkBuiltinLed() {
-    for (unsigned int i = 0; i < 10; i++) {
-        builtInLedOn();
-        delay(200);
-        builtInLedOff();
-        delay(100);
+void novyFan(uint level) {
+    emitter.setProtocol(12);
+    emitter.setPulseLength(350);
+    emitter.send(BTN_MINUS);
+    delay(10);
+    emitter.send(BTN_MINUS);
+    delay(10);
+    emitter.send(BTN_MINUS);
+    delay(10);
+    emitter.send(BTN_MINUS);
+    delay(10);
+    for (uint i = 0; i < level; i++) {
+        emitter.send(BTN_PLUS);
+        delay(10);
     }
 }
 
-boolean loadConfig() {
-    EEPROM.begin(MAGIC_LENGTH + BROKER_LENGTH + sizeof(port));
-    EEPROM.get(0, magic);
-    boolean success = false;
-    if (!strcmp(MAGIC, magic)) {
-        success = true;
-        EEPROM.get(MAGIC_LENGTH, broker);
-        EEPROM.get(MAGIC_LENGTH + BROKER_LENGTH, port);
-        Serial.print("Loaded broker: ");
-        Serial.println(broker);
-        Serial.print("Loaded port: ");
-        Serial.println(port);
-    } else {
-        Serial.println("No magic bytes found. Not loading config.");
-    }
-    EEPROM.end();
-    return success;
+void plugsOn(uint outlet) {
+    emitter.setProtocol(1);
+    emitter.setPulseLength(190);
+    emitter.send(RC_CODES[outlet-1][0].c_str());
 }
 
-void saveConfig() {
-    strncpy(broker, brokerParam.getValue(), BROKER_LENGTH);
-    port = (short)atoi(portParam.getValue());
-
-    EEPROM.begin(MAGIC_LENGTH + BROKER_LENGTH + sizeof(port));
-    EEPROM.put(0, MAGIC);
-    EEPROM.put(MAGIC_LENGTH, broker);
-    EEPROM.put(MAGIC_LENGTH + BROKER_LENGTH, port);
-    EEPROM.end();
-
-    Serial.print("Saved broker: ");
-    Serial.println(broker);
-    Serial.print("Saved port: ");
-    Serial.println(port);
-}
-
-void configureWiFiManager() {
-    wiFiManager.addParameter(&titleLabelParam);
-    wiFiManager.addParameter(&brokerLabelParam);
-    wiFiManager.addParameter(&brokerParam);
-    wiFiManager.addParameter(&portLabelParam);
-    wiFiManager.addParameter(&portParam);
-    wiFiManager.setConfigPortalTimeout(PORTAL_TIMEOUT);
-    wiFiManager.setSaveConfigCallback(saveConfig);
+void plugsOff(uint outlet) {
+    emitter.setProtocol(1);
+    emitter.setPulseLength(190);
+    emitter.send(RC_CODES[outlet-1][1].c_str());
 }
 
 void callback(char *topic, byte *payload, unsigned int length) {
     Serial.print("Message arrived [");
     Serial.print(topic);
     Serial.print("] ");
+    
+    String payloadStr;
     for (unsigned int i = 0; i < length; i++) {
-        Serial.print((char)payload[i]);
+        payloadStr += (char) payload[i];
     }
-    Serial.println();
-    if (!strncmp(topic, TOPIC_NOVY_LIGHT, sizeof(TOPIC_NOVY_LIGHT))) {
+    Serial.println(payloadStr);
+    if (TOPIC_NOVY_LIGHT.equals(topic)) {
         Serial.println("Novy light on/off");
-        emitter.send(BTN_LIGHT);
+        novyLight();
+    } else if (TOPIC_NOVY_FAN.equals(topic)) {
+        Serial.print("Outlet on: ");
+        Serial.println(payloadStr);
+        plugsOn(payloadStr.toInt());
+    } else if (TOPIC_ETEKCITY_OUTLET_ON.equals(topic)) {
+        Serial.print("Outlet on: ");
+        Serial.println(payloadStr);
+        plugsOn(payloadStr.toInt());
+    } else if (TOPIC_ETEKCITY_OUTLET_OFF.equals(topic)) {
+        Serial.print("Outlet off: ");
+        Serial.println(payloadStr);
+        plugsOff(payloadStr.toInt());
     }
+}
+
+String mqttStateToString(int state) {
+    switch (state) {
+        case MQTT_CONNECTION_TIMEOUT:
+            return "the server didn't respond within the keepalive time";
+        case MQTT_CONNECTION_LOST:
+            return "the network connection was broken";
+        case MQTT_CONNECT_FAILED:
+            return "the network connection failed";
+        case MQTT_DISCONNECTED:
+            return "the client is disconnected cleanly";
+        case MQTT_CONNECTED:
+            return "the client is connected";
+        case MQTT_CONNECT_BAD_PROTOCOL:
+            return "the server doesn't support the requested version of MQTT";
+        case MQTT_CONNECT_BAD_CLIENT_ID:
+            return "the server rejected the client identifier";
+        case MQTT_CONNECT_UNAVAILABLE:
+            return "the server was unable to accept the connection";
+        case MQTT_CONNECT_BAD_CREDENTIALS:
+            return "the username/password were rejected";
+        case MQTT_CONNECT_UNAUTHORIZED:
+            return "the client was not authorized to connect";
+        default:
+            return "unknown";
+        }
 }
 
 boolean reconnect() {
     boolean success = false;
-    Serial.print("Attempting MQTT connection... ");
-    builtInLedOn();
-    String clientId = BASE_CLIENT_ID;
-    clientId += String(random(0xffff), HEX);
-    if (client.connect(clientId.c_str())) {
+
+    String broker = wiFiManager.getBroker();
+    uint port = wiFiManager.getPort();
+
+    Serial.print("Attempting MQTT connection to ");
+    Serial.print(broker);
+    Serial.print(":");
+    Serial.print(port);
+    Serial.print("... ");
+
+    if (mqttClient.connected()) {
+        Serial.print("Already connected. Doing nothing.");
+        return true;
+    }
+
+    builtInLed.on();
+    
+    mqttClient.setServer(broker.c_str(), port);
+
+    String clientId = BASE_CLIENT_ID + String(random(0xffff), HEX);
+    
+    if (mqttClient.connect(clientId.c_str())) {
         Serial.println("Connected.");
-        client.subscribe(TOPIC_NOVY_WILDCARD);
+        mqttClient.subscribe(TOPIC_RF_MQTT_BRIDGE_WIDLCARD.c_str());
         success = true;
     } else {
         Serial.print("Failed (");
-        switch (client.state()) {
-        case MQTT_CONNECTION_TIMEOUT:
-            Serial.print("the server didn't respond within the keepalive time");
-            break;
-        case MQTT_CONNECTION_LOST:
-            Serial.print("the network connection was broken");
-            break;
-        case MQTT_CONNECT_FAILED:
-            Serial.print("the network connection failed");
-            break;
-        case MQTT_DISCONNECTED:
-            Serial.print("the client is disconnected cleanly");
-            break;
-        case MQTT_CONNECTED:
-            Serial.print("the client is connected");
-            break;
-        case MQTT_CONNECT_BAD_PROTOCOL:
-            Serial.print("the server doesn't support the requested version of MQTT");
-            break;
-        case MQTT_CONNECT_BAD_CLIENT_ID:
-            Serial.print("the server rejected the client identifier");
-            break;
-        case MQTT_CONNECT_UNAVAILABLE:
-            Serial.print("the server was unable to accept the connection");
-            break;
-        case MQTT_CONNECT_BAD_CREDENTIALS:
-            Serial.print("the username/password were rejected");
-            break;
-        case MQTT_CONNECT_UNAUTHORIZED:
-            Serial.print("the client was not authorized to connect");
-            break;
-        default:
-            Serial.print("unknown");
-        }
+        Serial.print(mqttStateToString(mqttClient.state()).c_str());
         Serial.println(").");
         success = false;
     }
-    builtInLedOff();
+
+    builtInLed.off();
+
     return success;
 }
 
 void setup() {
     Serial.begin(9600);
     Serial.println();
+    Serial.println("Start setup.");
 
-    loadConfig();
+    wiFiManager.loadConfig();
+    wiFiClient.setInsecure();
 
-    configureWiFiManager();
-
-    if (!wiFiManager.autoConnect(PORTAL_NAME)) {
+    if (!wiFiManager.autoConnect()) {
         Serial.println("Unable to connect. Sleeping.");
         ESP.deepSleep(0);
     }
 
     emitter.enableTransmit(TX_PIN);
-    emitter.setProtocol(12);
-    emitter.setPulseLength(350);
 
-    wiFiClient.setInsecure();
-    client.setServer(broker, port);
-    client.setCallback(callback);
+    mqttClient.setCallback(callback);
+    Serial.println("End setup.");
 }
 
 void loop() {
     if (pressed(BUTTON)) {
         Serial.println("Flash button pressed.");
-        blinkBuiltinLed();
-        wiFiManager.startConfigPortal(PORTAL_NAME);
+        builtInLed.blink();
+        wiFiManager.startConfigPortal();
     }
-    if (!client.connected() && !reconnect()) {
+    if (!mqttClient.connected() && !reconnect()) {
         Serial.println("Sleeping for 5 seconds...");
         delay(5000);
     }
-    client.loop();
+    mqttClient.loop();
 }

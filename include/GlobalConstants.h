@@ -17,29 +17,33 @@
 
 #pragma once
 
-#define PORTAL_NAME "RF-MQTT Bridge"
-#define PORTAL_TIMEOUT 120
+static const String PORTAL_NAME = "RF-MQTT Bridge";
+static const uint PORTAL_TIMEOUT = 120;
 
-#define DEFAULT_BROKER "mqtt.example.com"
-#define DEFAULT_LISTENING_PORT 8883
+static const String DEFAULT_BROKER = "mqtt.example.com";
+static const ushort DEFAULT_LISTENING_PORT = 8883;
 
-#define BASE_CLIENT_ID "rf-mqtt-bridge-"
+static const String BASE_CLIENT_ID = "rf-mqtt-bridge-";
 
-#define TOPIC_RF_MQTT_BRIDGE "rf-mqtt-bridge"
-#define TOPIC_NOVY TOPIC_RF_MQTT_BRIDGE "/novy"
-#define TOPIC_NOVY_WILDCARD TOPIC_NOVY "/#"
-#define TOPIC_NOVY_LIGHT TOPIC_NOVY "/light"
-#define TOPIC_NOVY_MINUS TOPIC_NOVY "/minus"
-#define TOPIC_NOVY_PLUS TOPIC_NOVY "/plus"
-#define TOPIC_NOVY_POWER TOPIC_NOVY "/power"
-#define TOPIC_NOVY_NOVY TOPIC_NOVY "/novy"
+static const String TOPIC_RF_MQTT_BRIDGE = "rf-mqtt-bridge";
+static const String TOPIC_RF_MQTT_BRIDGE_WIDLCARD = TOPIC_RF_MQTT_BRIDGE + "/#";
+static const String TOPIC_NOVY = TOPIC_RF_MQTT_BRIDGE + "/novy";
+static const String TOPIC_NOVY_LIGHT = TOPIC_NOVY + "/light";
+static const String TOPIC_NOVY_MINUS = TOPIC_NOVY + "/minus";
+static const String TOPIC_NOVY_PLUS = TOPIC_NOVY + "/plus";
+static const String TOPIC_NOVY_POWER = TOPIC_NOVY + "/power";
+static const String TOPIC_NOVY_NOVY = TOPIC_NOVY + "/novy";
+static const String TOPIC_NOVY_FAN = TOPIC_NOVY + "/fan";
+static const String TOPIC_ETEKCITY =  TOPIC_RF_MQTT_BRIDGE + "/etekcity";
+static const String TOPIC_ETEKCITY_OUTLET_ON = TOPIC_ETEKCITY + "/outlet-on";
+static const String TOPIC_ETEKCITY_OUTLET_OFF = TOPIC_ETEKCITY +"/outlet-off";
 
-#define TX_PIN D1
-#define RX_PIN D6
-#define BUTTON D3
+static const uint8_t TX_PIN = D1;
+static const uint8_t RX_PIN = D6;
+static const uint8_t BUTTON = D3;
 
 /**
- * Sniffed codes for minus buttons from the original NOVY remote controller
+ * Sniffed codes for minus button from the original NOVY remote controller
  * 
  *  Code  1 -> 010101010110
  *  Code  2 -> 100101010110
@@ -76,3 +80,12 @@
 #define BTN_POWER DEVICE PREFIX "0111010011"
 #define BTN_PLUS DEVICE PREFIX "0101"
 #define BTN_MINUS DEVICE PREFIX "0110"
+
+static const String RC_CODES[5][2] = {
+	// ON                        //OFF 
+	{"010001010101010100110011", "010001010101010100111100"}, /* Outlet 1 */
+	{"010001010101010111000011", "010001010101010111001100"}, /* Outlet 2 */
+	{"010001010101011100000011", "010001010101011100001100"}, /* Outlet 3 */
+	{"010001010101110100000011", "010001010101011100001100"}, /* Outlet 4 */
+	{"010001010111010100000011", "010001010111010100001100"}, /* Outlet 5 */
+};
