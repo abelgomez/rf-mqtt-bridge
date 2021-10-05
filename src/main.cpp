@@ -17,15 +17,15 @@
 
 #include <Arduino.h>
 #include <PubSubClient.h>
-#include <RCSwitch.h>
 #include <WiFiClientSecure.h>
 
-#include "GlobalConstants.h"
 #include "BridgeWiFiManager.h"
 #include "BuiltInLed.h"
+#include "EtekcityController.h"
+#include "GlobalConstants.h"
+#include "NovyController.h"
 
 BridgeWiFiManager wiFiManager;
-RCSwitch emitter;
 BuiltInLed builtInLed;
 WiFiClientSecure wiFiClient;
 PubSubClient mqttClient(wiFiClient);
@@ -34,143 +34,78 @@ inline boolean pressed(uint8_t pin) {
     return digitalRead(pin) == LOW;
 }
 
-void novyLight() {
-    emitter.setProtocol(12);
-    emitter.setPulseLength(350);
-    emitter.send(BTN_LIGHT);
-}
-
-void novyLightOn() {
-    emitter.setProtocol(12);
-    emitter.setPulseLength(350);
-    for (uint i = 0; i < 5; i++) {
-        emitter.send(BTN_LIGHT);
-        delay(100);
-    }
-    delay(300);
-    emitter.send(BTN_LIGHT);
-    delay(400);
-    emitter.send(BTN_LIGHT);
-}
-
-void novyLightOff() {
-    emitter.setProtocol(12);
-    emitter.setPulseLength(350);
-    for (uint i = 0; i < 5; i++) {
-        emitter.send(BTN_LIGHT);
-        delay(100);
-    }
-    delay(300);
-    emitter.send(BTN_LIGHT);
-}
-
-void novyFanMinus() {
-    emitter.setProtocol(12);
-    emitter.setPulseLength(350);
-    emitter.send(BTN_MINUS);
-}
-
-void novyFanPlus() {
-    emitter.setProtocol(12);
-    emitter.setPulseLength(350);
-    emitter.send(BTN_PLUS);
-}
-
-void novyFan(uint level) {
-    emitter.setProtocol(12);
-    emitter.setPulseLength(350);
-    emitter.send(BTN_MINUS);
-    delay(200);
-    emitter.send(BTN_MINUS);
-    delay(200);
-    emitter.send(BTN_MINUS);
-    delay(200);
-    emitter.send(BTN_MINUS);
-    delay(200);
-    for (uint i = 0; i < level; i++) {
-        emitter.send(BTN_PLUS);
-        delay(200);
-    }
-}
-
-void plugsOn(uint outlet) {
-    emitter.setProtocol(1);
-    emitter.setPulseLength(190);
-    emitter.send(RC_CODES[outlet-1][0].c_str());
-}
-
-void plugsOff(uint outlet) {
-    emitter.setProtocol(1);
-    emitter.setPulseLength(190);
-    emitter.send(RC_CODES[outlet-1][1].c_str());
-}
-
 void callback(char *topic, byte *payload, unsigned int length) {
     Serial.print("Message arrived [");
     Serial.print(topic);
     Serial.print("] ");
-    
+
     String payloadStr;
     for (unsigned int i = 0; i < length; i++) {
-        payloadStr += (char) payload[i];
+        payloadStr += (char)payload[i];
     }
     Serial.println(payloadStr);
     if (TOPIC_NOVY_LIGHT.equals(topic)) {
         Serial.print("Novy light: ");
         Serial.println(payloadStr);
+        NovyController novyController(TX_PIN, 1);
         if (payloadStr.equalsIgnoreCase("on")) {
-            novyLightOn();
+            novyController.lightOn();
         } else if (payloadStr.equalsIgnoreCase("off")) {
-            novyLightOff();
+            novyController.lightOff();
         } else {
-            novyLight();
+            novyController.pressLight();
         }
     } else if (TOPIC_NOVY_MINUS.equals(topic)) {
         Serial.println("Novy fan -");
-        novyFanMinus();
+        NovyController novyController(TX_PIN, 1);
+        novyController.pressMinus();
     } else if (TOPIC_NOVY_PLUS.equals(topic)) {
         Serial.println("Novy fan +");
-        novyFanPlus();
+        NovyController novyController(TX_PIN, 1);
+        novyController.pressPlus();
     } else if (TOPIC_NOVY_FAN.equals(topic)) {
         Serial.print("Novy fan level: ");
         Serial.println(payloadStr);
-        novyFan(payloadStr.toInt());
+        NovyController novyController(TX_PIN, 1);
+        novyController.fan(payloadStr.toInt());
     } else if (TOPIC_ETEKCITY_OUTLET_ON.equals(topic)) {
         Serial.print("Outlet on: ");
         Serial.println(payloadStr);
-        plugsOn(payloadStr.toInt());
+        EtekcityController etekcityController(TX_PIN, payloadStr.toInt());
+        etekcityController.turnOn();
     } else if (TOPIC_ETEKCITY_OUTLET_OFF.equals(topic)) {
         Serial.print("Outlet off: ");
         Serial.println(payloadStr);
-        plugsOff(payloadStr.toInt());
+        EtekcityController etekcityController(TX_PIN, payloadStr.toInt());
+        etekcityController.turnOff();
     }
 }
 
 String mqttStateToString(int state) {
     switch (state) {
-        case MQTT_CONNECTION_TIMEOUT:
-            return "the server didn't respond within the keepalive time";
-        case MQTT_CONNECTION_LOST:
-            return "the network connection was broken";
-        case MQTT_CONNECT_FAILED:
-            return "the network connection failed";
-        case MQTT_DISCONNECTED:
-            return "the client is disconnected cleanly";
-        case MQTT_CONNECTED:
-            return "the client is connected";
-        case MQTT_CONNECT_BAD_PROTOCOL:
-            return "the server doesn't support the requested version of MQTT";
-        case MQTT_CONNECT_BAD_CLIENT_ID:
-            return "the server rejected the client identifier";
-        case MQTT_CONNECT_UNAVAILABLE:
-            return "the server was unable to accept the connection";
-        case MQTT_CONNECT_BAD_CREDENTIALS:
-            return "the username/password were rejected";
-        case MQTT_CONNECT_UNAUTHORIZED:
-            return "the client was not authorized to connect";
-        default:
-            return "unknown";
-        }
+    case MQTT_CONNECTION_TIMEOUT:
+        return "the server didn't respond within the keepalive time";
+    case MQTT_CONNECTION_LOST:
+        return "the network connection was broken";
+    case MQTT_CONNECT_FAILED:
+        return "the network connection failed";
+    case MQTT_DISCONNECTED:
+        return "the client is disconnected cleanly";
+    case MQTT_CONNECTED:
+        return "the client is connected";
+    case MQTT_CONNECT_BAD_PROTOCOL:
+        return "the server doesn't support the requested version of MQTT";
+    case MQTT_CONNECT_BAD_CLIENT_ID:
+        return "the server rejected the client identifier";
+    case MQTT_CONNECT_UNAVAILABLE:
+        return "the server was unable to accept the connection";
+    case MQTT_CONNECT_BAD_CREDENTIALS:
+        return "the username/password were rejected";
+    case MQTT_CONNECT_UNAUTHORIZED:
+        return "the client was not authorized to connect";
+    default:
+        return "unknown";
+    }
 }
 
 boolean reconnect() {
@@ -191,11 +126,11 @@ boolean reconnect() {
     }
 
     builtInLed.on();
-    
+
     mqttClient.setServer(broker.c_str(), port);
 
     String clientId = BASE_CLIENT_ID + String(random(0xffff), HEX);
-    
+
     if (mqttClient.connect(clientId.c_str())) {
         Serial.println("Connected.");
         mqttClient.subscribe(TOPIC_RF_MQTT_BRIDGE_WIDLCARD.c_str());
@@ -224,9 +159,7 @@ void setup() {
         Serial.println("Unable to connect. Sleeping.");
         ESP.deepSleep(0);
     }
-
-    emitter.enableTransmit(TX_PIN);
-
+    
     mqttClient.setCallback(callback);
     Serial.println("End setup.");
 }
