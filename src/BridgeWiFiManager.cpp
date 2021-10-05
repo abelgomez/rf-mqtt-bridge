@@ -23,6 +23,11 @@
 #define MAGIC_LENGTH 2
 #define BROKER_LENGTH 64
 
+static const String PORTAL_NAME = "RF-MQTT Bridge";
+static const uint PORTAL_TIMEOUT = 120;
+
+static const String DEFAULT_BROKER = "mqtt.example.com";
+static const ushort DEFAULT_LISTENING_PORT = 8883;
 
 BridgeWiFiManager::BridgeWiFiManager() :
         titleLabelParam("<h3>Broker configuration</h3>"),
@@ -75,6 +80,8 @@ void BridgeWiFiManager::loadConfig() {
         portParam.setValue(String(port).c_str(), 5);
     } else {
         Serial.println("No magic bytes found. Not loading config.");
+        brokerParam.setValue(DEFAULT_BROKER.c_str(), BROKER_LENGTH - 1);
+        portParam.setValue(String(DEFAULT_LISTENING_PORT).c_str(), 5);
     }
     EEPROM.end();
 }

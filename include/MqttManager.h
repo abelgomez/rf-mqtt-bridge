@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2021 Abel Gómez
+ * Copyright (C) 2021 agomez
  * 
  * RF-MQTT Bridge is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as published by
@@ -18,24 +18,28 @@
 #pragma once
 
 #include <Arduino.h>
-#include <WiFiManager.h>
+#include <PubSubClient.h>
+#include <WiFiClientSecure.h>
 
-class BridgeWiFiManager {
+#include "BuiltInLed.h"
+
+
+class MqttManager {
 private:
+    BuiltInLed builtInLed;
+    WiFiClientSecure wiFiClient;
+    PubSubClient mqttClient;
+    
+    String broker;
+    uint port;
 
-    WiFiManager wiFiManager;
-    WiFiManagerParameter titleLabelParam;
-    WiFiManagerParameter brokerParam;
-    WiFiManagerParameter portParam;
+    void mqttStateToString(int state);
+    boolean reconnect();
+    String stateToString(int state);
+    void handleMessage(char *topic, uint8_t *payload, unsigned int length);
 
 public:
-    BridgeWiFiManager();
-    
-    String getBroker();
-    ushort getPort();
-    boolean autoConnect();
-    boolean startConfigPortal();
-    void loadConfig();
-    void saveConfig();
+    MqttManager();
+    void loop();
+    void setConnectionInfo(String broker, uint port);
 };
-
