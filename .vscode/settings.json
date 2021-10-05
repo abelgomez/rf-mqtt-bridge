@@ -35,5 +35,7 @@
         "utility": "cpp",
         "typeinfo": "cpp",
         "string": "cpp"
-    }
+    },
+    "licenser.license": "LGPLv3",
+    "licenser.projectName": "RF-MQTT Bridge"
 }
