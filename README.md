@@ -44,3 +44,10 @@ This is what the final device looks like. If you want to increase the coverage o
 Once the device is running, you can use the MQTT dashboard application of your liking to send commands to your Novy cooker hood or your power outlets.
 
 ![Example dashboard](doc/example-dashboard.png)
+
+## Dependencies
+
+* [WiFiManager](https://github.com/tzapu/WiFiManager) (MIT license)
+* [rc-switch](https://github.com/sui77/rc-switch) (GNU LGPL license)
+* [PubSubClient](https://github.com/knolleary/pubsubclient) (MIT license)
+* [ESP_EEPROM](https://github.com/jwrw/ESP_EEPROM) (GNU LGPL license)
