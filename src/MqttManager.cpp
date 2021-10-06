@@ -115,8 +115,7 @@ void MqttManager::handleMessage(char *topic, uint8_t *bpayload, unsigned int len
 
     MatchState ms;
     ms.Target(topic);
-    char result = ms.Match("(%a+)/(%a+)/(%d+)/(%a+)", 0);
-    if (result == REGEXP_MATCHED) {
+    if (ms.Match("(%a+)/(%a+)/(%d+)/(%a+)")) {
         char buffer[128];
         String vendor = String(ms.GetCapture(buffer, 1));
         int device = String(ms.GetCapture(buffer, 2)).toInt();
@@ -152,7 +151,7 @@ void MqttManager::handleCommandNovy(int device, String command, String payload) 
     if (COMMAND_LIGHT.equals(command)) {
         if (COMMAND_ON.equalsIgnoreCase(payload)) {
             novyController.lightOn();
-        } else if (COMMAND_ON.equalsIgnoreCase(payload)) {
+        } else if (COMMAND_OFF.equalsIgnoreCase(payload)) {
             novyController.lightOff();
         } else {
             novyController.pressLight();
