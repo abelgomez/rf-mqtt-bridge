@@ -36,7 +36,10 @@ private:
     void mqttStateToString(int state);
     boolean reconnect();
     String stateToString(int state);
-    void handleMessage(char *topic, uint8_t *payload, unsigned int length);
+    void handleMessage(char *topic, uint8_t *bpayload, unsigned int length);
+    void handleCommand(String vendor, int device, String command, String payload);
+    void handleCommandNovy(int device, String command, String payload);
+    void handleCommandEtekcity(int device, String command);
 
 public:
     MqttManager();

@@ -15,25 +15,38 @@
  * along with RF-MQTT Bridge. If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <Regexp.h>
+
+#include "EtekcityController.h"
 #include "MqttManager.h"
 #include "NovyController.h"
-#include "EtekcityController.h"
 
 static const String BASE_CLIENT_ID = "rf-mqtt-bridge-";
 
-static const String TOPIC_RF_MQTT_BRIDGE = "rf-mqtt-bridge";
-static const String TOPIC_RF_MQTT_BRIDGE_WIDLCARD = TOPIC_RF_MQTT_BRIDGE + "/#";
-static const String TOPIC_NOVY = TOPIC_RF_MQTT_BRIDGE + "/novy";
-static const String TOPIC_NOVY_LIGHT = TOPIC_NOVY + "/light";
-static const String TOPIC_NOVY_MINUS = TOPIC_NOVY + "/minus";
-static const String TOPIC_NOVY_PLUS = TOPIC_NOVY + "/plus";
-static const String TOPIC_NOVY_POWER = TOPIC_NOVY + "/power";
-static const String TOPIC_NOVY_NOVY = TOPIC_NOVY + "/novy";
-static const String TOPIC_NOVY_FAN = TOPIC_NOVY + "/fan";
-static const String TOPIC_ETEKCITY = TOPIC_RF_MQTT_BRIDGE + "/etekcity";
-static const String TOPIC_ETEKCITY_OUTLET_ON = TOPIC_ETEKCITY + "/outlet-on";
-static const String TOPIC_ETEKCITY_OUTLET_OFF = TOPIC_ETEKCITY + "/outlet-off";
+/**
+ * Topic structure:
+ * 
+ * rf-mqtt-bridge/<vendor>/<device>/<command>
+ * 
+ * E.g.:
+ * rf-mqtt-bridge/novy/1/light
+ * rf-mqtt-bridge/novy/1/fan (In this case, the payload will contain the fan level)
+ * rf-mqtt-bridge/etekcity/2/on
+ */
 
+static const String BASE_TOPIC = "rf-mqtt-bridge";
+static const String BASE_TOPIC_WILDCARD = BASE_TOPIC + "/#";
+static const String VENDOR_NOVY = "novy";
+static const String VENDOR_ETEKCITY = "etekcity";
+
+static const String COMMAND_LIGHT = "light";
+static const String COMMAND_MINUS = "minus";
+static const String COMMAND_PLUS = "plus";
+static const String COMMAND_POWER = "power";
+static const String COMMAND_NOVY = "novy";
+static const String COMMAND_FAN = "fan";
+static const String COMMAND_ON = "on";
+static const String COMMAND_OFF = "off";
 
 MqttManager::MqttManager() : mqttClient(wiFiClient) {
     wiFiClient.setInsecure();
@@ -75,7 +88,7 @@ boolean MqttManager::reconnect() {
 
     if (mqttClient.connect(clientId.c_str())) {
         Serial.println("Connected.");
-        mqttClient.subscribe(TOPIC_RF_MQTT_BRIDGE_WIDLCARD.c_str());
+        mqttClient.subscribe(BASE_TOPIC_WILDCARD.c_str());
         success = true;
     } else {
         Serial.print("Failed (");
@@ -89,51 +102,81 @@ boolean MqttManager::reconnect() {
     return success;
 }
 
-
-void MqttManager::handleMessage(char *topic, uint8_t *payload, unsigned int length) {
+void MqttManager::handleMessage(char *topic, uint8_t *bpayload, unsigned int length) {
+    String payload;
+    for (unsigned int i = 0; i < length; i++) {
+        payload += (char)bpayload[i];
+    }
     Serial.print("Message arrived [");
     Serial.print(topic);
-    Serial.print("] ");
+    Serial.print("]: '");
+    Serial.print(payload);
+    Serial.println("'");
 
-    String payloadStr;
-    for (unsigned int i = 0; i < length; i++) {
-        payloadStr += (char)payload[i];
+    MatchState ms;
+    ms.Target(topic);
+    char result = ms.Match("(%a+)/(%a+)/(%d+)/(%a+)", 0);
+    if (result == REGEXP_MATCHED) {
+        char buffer[128];
+        String vendor = String(ms.GetCapture(buffer, 1));
+        int device = String(ms.GetCapture(buffer, 2)).toInt();
+        String command = String(ms.GetCapture(buffer, 3));
+        handleCommand(vendor, device, command, payload);
+    } else {
+        Serial.print("Unknown topic: ");
+        Serial.println(topic);
     }
-    Serial.println(payloadStr);
-    if (TOPIC_NOVY_LIGHT.equals(topic)) {
-        Serial.print("Novy light: ");
-        Serial.println(payloadStr);
-        NovyController novyController(TX_PIN, 1);
-        if (payloadStr.equalsIgnoreCase("on")) {
+}
+
+void MqttManager::handleCommand(String vendor, int device, String command, String payload) {
+    Serial.print("Handling command '");
+    Serial.print(command);
+    Serial.print("' for device '");
+    Serial.print(device);
+    Serial.print("' from vendor '");
+    Serial.print(vendor);
+    Serial.println("'");
+
+    if (VENDOR_NOVY.equals(vendor)) {
+        handleCommandNovy(device, command, payload);
+    } else if (VENDOR_ETEKCITY.equals(vendor)) {
+        handleCommandEtekcity(device, command);
+    } else {
+        Serial.print("Unknown vendor: ");
+        Serial.println(vendor);
+    }
+}
+
+void MqttManager::handleCommandNovy(int device, String command, String payload) {
+    NovyController novyController(TX_PIN, device);
+    if (COMMAND_LIGHT.equals(command)) {
+        if (COMMAND_ON.equalsIgnoreCase(payload)) {
             novyController.lightOn();
-        } else if (payloadStr.equalsIgnoreCase("off")) {
+        } else if (COMMAND_ON.equalsIgnoreCase(payload)) {
             novyController.lightOff();
         } else {
             novyController.pressLight();
         }
-    } else if (TOPIC_NOVY_MINUS.equals(topic)) {
-        Serial.println("Novy fan -");
-        NovyController novyController(TX_PIN, 1);
+    } else if (COMMAND_MINUS.equals(command)) {
         novyController.pressMinus();
-    } else if (TOPIC_NOVY_PLUS.equals(topic)) {
-        Serial.println("Novy fan +");
-        NovyController novyController(TX_PIN, 1);
+    } else if (COMMAND_PLUS.equals(command)) {
         novyController.pressPlus();
-    } else if (TOPIC_NOVY_FAN.equals(topic)) {
-        Serial.print("Novy fan level: ");
-        Serial.println(payloadStr);
-        NovyController novyController(TX_PIN, 1);
-        novyController.fan(payloadStr.toInt());
-    } else if (TOPIC_ETEKCITY_OUTLET_ON.equals(topic)) {
-        Serial.print("Outlet on: ");
-        Serial.println(payloadStr);
-        EtekcityController etekcityController(TX_PIN, payloadStr.toInt());
+    } else if (COMMAND_FAN.equals(command)) {
+        novyController.fan(payload.toInt());
+    } else {
+        Serial.print("Unknown command: ");
+        Serial.println(command);
+    }
+}
+void MqttManager::handleCommandEtekcity(int device, String command) {
+    EtekcityController etekcityController(TX_PIN, device);
+    if (COMMAND_ON.equals(command)) {
         etekcityController.turnOn();
-    } else if (TOPIC_ETEKCITY_OUTLET_OFF.equals(topic)) {
-        Serial.print("Outlet off: ");
-        Serial.println(payloadStr);
-        EtekcityController etekcityController(TX_PIN, payloadStr.toInt());
+    } else if (COMMAND_OFF.equals(command)) {
         etekcityController.turnOff();
+    } else {
+        Serial.print("Unknown command: ");
+        Serial.println(command);
     }
 }
 
