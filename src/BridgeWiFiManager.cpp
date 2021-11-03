@@ -39,6 +39,8 @@ BridgeWiFiManager::BridgeWiFiManager() :
     wiFiManager.addParameter(&portParam);
     wiFiManager.setConfigPortalTimeout(PORTAL_TIMEOUT);
     wiFiManager.setSaveParamsCallback(std::bind(&BridgeWiFiManager::saveConfig, this));
+    // Force WiFi off until explicitly connected to avoid showing the ESP SSID even when connected to an AP
+    WiFi.mode(WIFI_OFF);
 }
 
 String BridgeWiFiManager::getBroker() {
@@ -48,7 +50,6 @@ String BridgeWiFiManager::getBroker() {
 ushort BridgeWiFiManager::getPort() {
     return atoi(portParam.getValue());
 }
-
 
 boolean BridgeWiFiManager::autoConnect() {
     return wiFiManager.autoConnect(PORTAL_NAME.c_str());
